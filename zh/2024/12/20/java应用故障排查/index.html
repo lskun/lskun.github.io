@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh" itemscope itemtype="http://schema.org/WebPage">
+<head>
+  <meta name="generator" content="Hugo 0.120.4" />
+  <meta charset="utf-8">
+  <title>java应用故障排查 · lskun&#39;s blog</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="故障现象总结分类 Full GC次数过多； CPU过高; 不定期出现的接口耗时现象; 某个线程进入WAITING状态; 死锁; 对于线上系统突然产生的运行缓慢问" />
+
+  <meta name="keywords" content="programming, python, golang, blog, k8s, docker, openstack, open fair, togaf" />
+
+<link rel="canonical" href="https://lskun.top/zh/2024/12/20/java%E5%BA%94%E7%94%A8%E6%95%85%E9%9A%9C%E6%8E%92%E6%9F%A5/" />
+
+<link rel="stylesheet" href="/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css" integrity="sha384-hWVjflwFxL6sNzntih27bfxkr27PmbbK/iSvJ+a4+0owXq79v+lsFkW54bOGbiDQ" crossorigin="anonymous">
+<link rel="stylesheet" href="https://lskun.top/css/den.css">
+
+
+
+</head>
+<body>
+  
+  <div class="header-container" style="background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)), url('https://lskun.top/images/background.png'); background-position: center; background-size: cover;">
+  <div class="container">
+  <nav class="header-nav navbar navbar-expand-md navbar-dark light-dark">
+    <div class="header-logo navbar-brand">
+      
+        <a class="float-left" href="https://lskun.top/zh/">
+      
+        
+        <img class="mr20 header-logo-image" src="https://lskun.top/images/fly.png" alt="logo">
+        
+        
+          lskun
+         
+      </a>
+    </div>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="nav-menu collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav">
+        
+          <li class="nav-item">
+            
+              
+                <a class="nav-link" href="https://lskun.top/zh/category/notes/">笔记</a>
+              
+            
+          </li>
+        
+          <li class="nav-item">
+            
+              
+                <a class="nav-link" href="https://lskun.top/zh/category/demos/">展示</a>
+              
+            
+          </li>
+        
+          <li class="nav-item">
+            
+              <a class="nav-link" href="https://lskun.top/zh/about/">关于</a>
+            
+          </li>
+        
+        
+          
+            <li class="nav-item">
+              <a class="nav-link" href="https://lskun.top/en/"><i class="fas fa-globe"></i> English</a>
+            </li>
+          
+          
+          
+          
+        
+      </ul>
+    </div>
+  </nav>
+</div>
+
+<div class="container header-wrapper">
+  <div class="row">
+    <div class="col-lg-12">
+      <div class="header-content">
+        <h1 class="header-title">java应用故障排查</h1>
+        <p class="header-date">作者：
+          lskun /
+        
+        发表于
+        2024-12-20
+          / 分类：
+          <a href="https://lskun.top/zh/category/programming/">Programming</a>
+        </p>
+        
+        <div class="header-underline"></div>
+        
+          <div class="clearfix"></div>
+          <p class="float-right header-tags">
+              <i class="fas fa-tags" aria-hidden="true"></i>
+              <a href="https://lskun.top/zh/tag/python/">python</a>
+          </p>
+        
+        
+
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div>
+  <main>
+<div class="container content">
+  <article>
+  <h3 id="故障现象总结分类">故障现象总结分类</h3>
+<ul>
+<li>Full GC次数过多；</li>
+<li>CPU过高;</li>
+<li>不定期出现的接口耗时现象;</li>
+<li>某个线程进入WAITING状态;</li>
+<li>死锁;</li>
+</ul>
+<hr>
+<p>对于线上系统突然产生的运行缓慢问题，如果该问题导致线上系统不可用，那么首先需要做的就是，导出jstack和内存信息，然后重启系统，尽快保证系统的可用性。这种情况可能的原因主要有两种：</p>
+<ul>
+<li>
+<p>代码中某个位置读取数据量较大，导致系统内存耗尽，从而导致Full GC次数过多，系统缓慢；</p>
+</li>
+<li>
+<p>代码中有比较耗CPU的操作，导致CPU过高，系统运行缓慢；</p>
+</li>
+</ul>
+<hr>
+<p>相对来说，这是出现频率最高的两种线上问题，而且它们会直接导致系统不可用。另外有几种情况也会导致某个功能运行缓慢，但是不至于导致系统不可用：</p>
+<ul>
+<li>
+<p>代码某个位置有阻塞性的操作，导致该功能调用整体比较耗时，但出现是比较随* 机的；</p>
+</li>
+<li>
+<p>某个线程由于某种原因而进入WAITING状态，此时该功能整体不可用，但是无法复现；</p>
+</li>
+<li>
+<p>由于锁使用不当，导致多个线程进入死锁状态，从而导致系统整体比较缓慢。</p>
+</li>
+</ul>
+<p>对于这三种情况，通过查看CPU和系统内存情况是无法查看出具体问题的，因为它们相对来说都是具有一定阻塞性操作，CPU和系统内存使用情况都不高，但是功能却很慢。下面我们就通过查看系统日志来一步一步甄别上述几种问题。</p>
+<h3 id="我们进行线上日志分析时主要可以分为如下步骤">我们进行线上日志分析时，主要可以分为如下步骤：</h3>
+<ul>
+<li>通过 <code>top</code>命令查看CPU情况，如果CPU比较高，则通过<code>top -Hp &lt;pid&gt;</code>命令查看当前进程的各个线程运行情况，找出CPU过高的线程之后，将其线程id转换为十六进制的表现形式，然后在jstack日志中查看该线程主要在进行的工作。这里又分为两种情况</li>
+<li>如果是正常的用户线程，则通过该线程的堆栈信息查看其具体是在哪处用户代码处运行比较消耗CPU；</li>
+<li>如果该线程是<code>VM Thread</code>，则通过<code>jstat -gcutil &lt;pid&gt; &lt;period&gt; &lt;times&gt;</code>命令监控当前系统的GC状况，然后通过<code>jmap dump:format=b,file=&lt;filepath&gt; &lt;pid&gt;</code>导出系统当前的内存数据。导出之后将内存情况放到eclipse的mat工具中进行分析即可得出内存中主要是什么对象比较消耗内存，进而可以处理相关代码；</li>
+<li>如果通过 <code>top</code> 命令看到CPU并不高，并且系统内存占用率也比较低。此时就可以考虑是否是由于另外三种情况导致的问题。具体的可以根据具体情况分析：</li>
+<li>如果是接口调用比较耗时，并且是不定时出现，则可以通过压测的方式加大阻塞点出现的频率，从而通过<code>jstack</code>查看堆栈信息，找到阻塞点；</li>
+<li>如果是某个功能突然出现停滞的状况，这种情况也无法复现，此时可以通过多次导出<code>jstack</code>日志的方式对比哪些用户线程是一直都处于等待状态，这些线程就是可能存在问题的线程；</li>
+<li>如果通过<code>jstack</code>可以查看到死锁状态，则可以检查产生死锁的两个线程的具体阻塞点，从而处理相应的问题。</li>
+</ul>
+<h3 id="一般问题排查操作步骤">一般问题排查操作步骤</h3>
+<ul>
+<li>
+<p>找到CPU利用率持续比较高的进程, 命令：top</p>
+</li>
+<li>
+<p>找到CPU使用率较高的线程ID(TID)：</p>
+<p>命令：ps p 16480 -L -o pcpu,pid,tid,time,tname,cmd</p>
+</li>
+<li>
+<p>将获取的线程号（十进制数）转换成十六进制</p>
+<p>printf &ldquo;%x\n&rdquo; 16498</p>
+<p>结果：4072</p>
+<p>结合进程号和线程号,利用jstack查到异常代码所在行</p>
+<p><code>jstack -l &lt;pid&gt; | grep &lt;thread-hex-id&gt; -A 10</code> 命令显示出错的堆栈信息，如下图：</p>
+<p>jstack -l 16480| grep 0x4072 -A 10</p>
+<p><code>-A 10</code> 参数用来指定显示行数，否则只会显示一行信息。</p>
+</li>
+</ul>
+
+  </article>
+
+  
+  
+    
+    
+    
+  
+  
+
+
+</div>
+
+  </main><div class="footer gradient-2">
+  <div class="container footer-container ">
+    <div class="row">
+      <div class="col-xs-4 col-sm-3 col-md-3 col-lg-3">
+        <div class="footer-title">网站地图</div>
+        <ul class="list-unstyled">
+            
+              
+                <li><a href="https://lskun.top/zh/tags/">标签</a></li>
+              
+              
+                <li><a href="https://lskun.top/zh/categories/">分类</a></li>
+              
+            
+            
+            
+            <li><a rel="alternate" type="application/rss&#43;xml" href="https://lskun.top/zh/index.xml"><i class="fas fa-rss-square"></i> RSS订阅</a></li>
+            
+            
+            
+        </ul>
+      </div>
+      <div class="col-xs-4 col-sm-3 col-md-3 col-lg-3">
+        
+        <div class="footer-title">社群</div>
+        <ul class="list-unstyled">
+          
+          <li><a href="https://github.com/lskun" rel="noopener" target="_blank">GitHub</a></li>
+          
+        </ul>
+        
+      </div>
+      <div class="col-xs-4 col-sm-3 col-md-3 col-lg-3">
+        
+        <div class="footer-title">友链</div>
+        <ul class="list-unstyled">
+          
+          <li><a href="https://github.com/lskun" rel="noopener" target="_blank">关于我</a></li>
+          
+        </ul>
+        
+      </div> 
+      <div class="col-xs-12 col-sm-3 col-md-3 col-lg-3">
+        <p class="pull-right text-right">
+          <small><em>Proudly powered by <a href="https://gohugo.io/" rel="noopener" target="_blank">Hugo</a></em></small><br/>
+          <small><em>Theme - <a href="https://github.com/shaform/hugo-theme-den" rel="noopener" target="_blank">Den</a></em></small><br/>
+          <small>
+            &copy; 
+            lskun
+            2024
+          </small>
+          
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="/js/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+<script src="/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+
+</body>
+</html>
