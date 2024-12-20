@@ -1,0 +1,5 @@
+baseURL = "https://www.lskun.top/"
+languageCode = "en-us"
+title = "Lskun's Blog"
+theme = "hugo-theme-den"
+
